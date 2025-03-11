@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoBotics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeIn 0.8s ease-in-out; }
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        .drag-area {
+            border: 2px dashed #4caf50;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .drag-area.dragover {
+            background: rgba(76, 175, 80, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-lime-200 to-green-300 flex items-center justify-center h-screen">
+    <div class="w-full max-w-3xl glassmorphism rounded-lg p-6 shadow-lg fade-in">
+        <div class="text-center pb-4">
+            <h2 class="text-6xl font-bold text-green-800">EcoBotics</h2>
+            <p class="text-gray-700">Upload an image or ask questions about waste management</p>
+        </div>
+
+        <div id="chat-box" class="p-4 h-[500px] max-h-[70vh] w-full overflow-y-auto border-2 border-green-500 bg-white rounded-xl"></div>
+        <div class="absolute top-0 left-0 w-full h-full bg-[url('{{ url_for('static', filename='logo.png') }}')] bg-center bg-no-repeat bg-cover opacity-5 pointer-events-none rounded-xl"></div>
+            <div class="p-4 flex items-center gap-2">
+            <input id="chat-input" type="text" placeholder="Ask about waste management..." 
+                   class="flex-1 p-3 border rounded-lg text-gray-700 shadow-sm">
+            <button id="send-btn" class="bg-green-500 text-white p-2 rounded-lg">➤</button>
+            <button id="clear-btn" class="bg-red-500 text-white p-2 rounded-lg">🗑</button>
+        </div>
+
+        <!-- Drag and Drop Upload Section -->
+        <div id="drag-area" class="drag-area mt-4">
+            <p>Drag & Drop an image here or <span class="text-green-600 font-bold">click to upload</span></p>
+            <input id="image-upload" type="file" accept="image/*" class="hidden">
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+        document.getElementById('chat-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            document.getElementById('chat-box').innerHTML = '';
+            // window.location.href = "/clear"; // Clear chat history
+            window.location.replace("/clear");
+        });
+
+        const dragArea = document.getElementById('drag-area');
+        const fileInput = document.getElementById('image-upload');
+
+        dragArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+
+        dragArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dragArea.classList.add('dragover');
+        });
+
+        dragArea.addEventListener('dragleave', () => {
+            dragArea.classList.remove('dragover');
+        });
+
+        dragArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragArea.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file) uploadImage(file);
+        });
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) uploadImage(file);
+        }
+
+        function sendMessage() {
+            const inputField = document.getElementById('chat-input');
+            const message = inputField.value.trim();
+            if (!message) return;
+            addMessage('You', message);
+            inputField.value = '';
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message})
+            })
+            .then(res => res.json())
+            .then(data => addMessage('Eco', data.history[0].message))
+            .catch(() => addMessage('Eco', 'Error processing request.'));
+        }
+
+        function uploadImage(file) {
+            const formData = new FormData();
+            formData.append('image', file);
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    addMessage('Bot', data.error);
+                } else {
+                    addImageMessage('You', URL.createObjectURL(file));
+                    addMessage('Bot', data.history[0].message);
+                }
+            })
+            .catch(() => addMessage('Bot', 'Error uploading image.'));
+        }
+
+        function addMessage(sender, message) {
+            const chatBox = document.getElementById('chat-box');
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('p-2', sender === 'You' ? 'text-right' : 'text-left', 'fade-in');
+            messageDiv.innerHTML = `<strong>${sender}:</strong> ${message}`;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function addImageMessage(sender, imageUrl) {
+            const chatBox = document.getElementById('chat-box');
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('p-2', sender === 'You' ? 'text-right' : 'text-left', 'fade-in');
+            messageDiv.innerHTML = `<strong>${sender}:</strong><br><img src="${imageUrl}" class="max-w-xs rounded-lg shadow-md mt-2">`;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+    </script>
+</body>
+</html>
